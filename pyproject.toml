@@ -1,6 +1,6 @@
 [project]
 name = "echoliner"
-version = "0.1.0"
+version = "0.2.0"
 description = "EchoLiner open-source modular manufacturing toolkit"
 authors = [{name = "EchoLiner Labs"}]
 readme = "README.md"
