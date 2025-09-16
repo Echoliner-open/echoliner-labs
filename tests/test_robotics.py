@@ -1,13 +1,12 @@
 import numpy as np
 
-import numpy as np
-
 from echoliner.robotics import (
     DHLink,
     ComputedTorqueController,
     JointDynamics,
     KinematicChain,
     ModelPredictiveController,
+    OperationalSpaceController,
     RRTPlanner,
     RigidBodyParameters,
     TrajectorySmoother,
@@ -23,6 +22,15 @@ def _planar_chain() -> KinematicChain:
         DHLink(a=0.4, alpha=0.0, d=0.0),
     ]
     return KinematicChain(links)
+
+
+def _planar_dynamics() -> JointDynamics:
+    chain = _planar_chain()
+    params = [
+        RigidBodyParameters(mass=5.0, com=np.array([0.12, 0.0, 0.0]), inertia=np.eye(3)),
+        RigidBodyParameters(mass=3.5, com=np.array([0.08, 0.0, 0.0]), inertia=np.eye(3)),
+    ]
+    return JointDynamics(chain, params)
 
 
 def test_forward_kinematics_planar_arm() -> None:
@@ -116,3 +124,31 @@ def test_simulate_dynamics_advances_state() -> None:
     q, dq = simulate_dynamics(model, np.zeros(2), np.zeros(2), np.ones(2), dt=0.01)
     assert q.shape == (2,)
     assert dq.shape == (2,)
+
+
+def test_operational_space_controller_matches_gravity_at_target() -> None:
+    model = _planar_dynamics()
+    controller = OperationalSpaceController(
+        model,
+        task_stiffness=np.ones(6) * 40.0,
+        task_damping=np.ones(6) * 5.0,
+    )
+    q = np.zeros(model.chain.dof)
+    pose = model.chain.forward_kinematics(q)
+    torque = controller.compute(q, np.zeros(model.chain.dof), pose)
+    np.testing.assert_allclose(torque, model.gravity(q), atol=1e-6)
+
+
+def test_operational_space_controller_generates_correction_torque() -> None:
+    model = _planar_dynamics()
+    controller = OperationalSpaceController(
+        model,
+        task_stiffness=np.ones(6) * 30.0,
+        task_damping=np.ones(6) * 4.0,
+    )
+    q = np.zeros(model.chain.dof)
+    target = model.chain.forward_kinematics(q)
+    target[0, 3] += 0.05
+    torque = controller.compute(q, np.zeros(model.chain.dof), target)
+    gravity = model.gravity(q)
+    assert np.linalg.norm(torque - gravity) > 1e-6

@@ -1,6 +1,11 @@
 """Robotics module featuring kinematics, dynamics, and control."""
 
-from .control import ComputedTorqueController, ImpedanceController, ModelPredictiveController
+from .control import (
+    ComputedTorqueController,
+    ImpedanceController,
+    ModelPredictiveController,
+    OperationalSpaceController,
+)
 from .dynamics import (
     JointDynamics,
     RigidBodyParameters,
@@ -25,6 +30,7 @@ __all__ = [
     "ComputedTorqueController",
     "ImpedanceController",
     "ModelPredictiveController",
+    "OperationalSpaceController",
     "RRTPlanner",
     "TrajectorySmoother",
     "WorkspaceObstacle",

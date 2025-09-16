@@ -77,12 +77,18 @@ in real time.
 * `UnscentedKalmanFilter`, `AsynchronousFusionEngine` – asynchronous sensor
   fusion across heterogeneous sensing modalities (vision + lidar + IMUs).
 
+### Dense Fusion & Mapping
+
+* `VolumetricTSDF` – online truncated signed distance fusion that turns raw
+  depth imagery into metrically consistent occupancy and surface reconstructions
+  for metrology, inspection, and workcell simulation.
+
 ### Vision Quick Start
 
 ```python
 import numpy as np
 from echoliner.vision import (
-    CameraExtrinsics, compose_projection_matrix, essential_matrix,
+    CameraExtrinsics, VolumetricTSDF, compose_projection_matrix, essential_matrix,
     estimate_extrinsics_dlt, project_points, ConstantVelocityModel,
     KalmanTracker, SensorStream, UnscentedKalmanFilter, AsynchronousFusionEngine
 )
@@ -117,6 +123,12 @@ engine = AsynchronousFusionEngine(
 )
 engine.step(0.033)
 engine.ingest("vision", np.array([0.9]))
+
+# Fuse a depth image into a TSDF volume for later inspection
+tsdf = VolumetricTSDF(bounds=np.array([[-0.5, -0.5, 0.0], [0.5, 0.5, 1.5]]), resolution=(48, 48, 48))
+depth = np.ones((32, 32))
+tsdf.integrate(depth, intrinsics=np.array([[20.0, 0.0, 15.5], [0.0, 20.0, 15.5], [0.0, 0.0, 1.0]]), extrinsics=left_pose)
+surface = tsdf.extract_point_cloud()
 ```
 
 ## Robotics Stack
@@ -133,6 +145,9 @@ planning, whole-body control, and physically-plausible simulation.
 * `ComputedTorqueController`, `ImpedanceController`, `ModelPredictiveController`
   – torque-level control policies ranging from classic computed torque to
   horizon-based MPC.
+* `OperationalSpaceController` – task-space regulation with nullspace posture
+  control that blends research-grade whole-body control with production-ready
+  gravity and Coriolis compensation.
 * `RRTPlanner`, `TrajectorySmoother` – joint-space RRT with cubic-spline
   post-processing for agile obstacle avoidance.
 * `simulate_dynamics` – semi-implicit Euler integrator for fast prototyping.
@@ -142,7 +157,7 @@ planning, whole-body control, and physically-plausible simulation.
 ```python
 from echoliner.robotics import (
     DHLink, KinematicChain, JointDynamics, RigidBodyParameters,
-    ComputedTorqueController, RRTPlanner, plan_minimum_jerk
+    ComputedTorqueController, OperationalSpaceController, RRTPlanner, plan_minimum_jerk
 )
 import numpy as np
 
@@ -158,6 +173,16 @@ planner = RRTPlanner(chain, bounds=[(-np.pi, np.pi), (-np.pi, np.pi)])
 path = planner.plan([0.0, 0.0], [1.0, -0.6], lambda _: False)
 trajectory_t, trajectory_q = plan_minimum_jerk(path[0], path[-1], duration=2.5, samples=100)
 torque = controller(np.zeros(2), np.zeros(2), trajectory_q[-1])
+
+# Operational-space control to bias the end-effector towards a new pose
+op_controller = OperationalSpaceController(
+    model,
+    task_stiffness=np.ones(6) * 40.0,
+    task_damping=np.ones(6) * 6.0,
+)
+target_pose = chain.forward_kinematics([0.3, -0.2])
+target_pose[0, 3] += 0.05
+op_torque = op_controller.compute(np.zeros(2), np.zeros(2), target_pose)
 ```
 
 ## Translation & Speech Intelligence
@@ -223,8 +248,9 @@ and full-fidelity digital twins.
   – online telemetry filters and detectors for PLC, SCADA, and MES pipelines.
 * `StateSpaceModel`, `kalman_forecast`, `seasonal_baseline` – Kalman-based
   forecasting and seasonal baselines for predictive maintenance.
-* `DigitalTwin` – minimal digital twin that simulates throughput, downtime, and
-  manipulator joint traces with stochastic failure models.
+* `DigitalTwin` – stochastic factory twin capturing throughput, quality yield,
+  energy consumption, manipulator torque demand, and condition indices with
+  optional Monte Carlo rollouts (`run_monte_carlo`) and maintenance scheduling.
 
 ### Analytics Quick Start
 
@@ -233,6 +259,7 @@ from echoliner.analytics import (
     CellComponent, DigitalTwin, ProductionRun,
     StreamingAnomalyDetector, kalman_forecast, StateSpaceModel
 )
+from echoliner.robotics import DHLink, KinematicChain
 import numpy as np
 
 runs = [
@@ -261,7 +288,9 @@ twin = DigitalTwin(
     manipulator=KinematicChain([DHLink(a=0.4, alpha=0.0, d=0.0)])
 )
 metrics = twin.run(demand=300.0, time_step=1.0)
-print(metrics.keys())
+print(metrics["first_pass_yield"][-5:])
+summary = twin.run_monte_carlo(demand=300.0, trials=5, time_step=1.0)
+print(summary["throughput"]["mean"][0:3])
 ```
 
 ## Research Playbooks
@@ -278,6 +307,21 @@ The project is tuned for iterative experimentation:
 3. **Streaming OEE Dashboards** – Deploy `StreamingAnomalyDetector` alongside
    `generate_synthetic_streams` during edge simulation to tune thresholds before
    connecting to production telemetry.
+
+## Documentation Wiki
+
+The `docs/wiki` directory mirrors the structure of our internal field guides
+with detailed walkthroughs for each subsystem:
+
+* [Overview](docs/wiki/README.md) – architectural tour and navigation tips.
+* [Vision Systems](docs/wiki/Vision.md) – calibration pipelines, fusion flows,
+  and volumetric mapping recipes.
+* [Robotics Stack](docs/wiki/Robotics.md) – control architecture breakdowns,
+  including operational-space heuristics and safety envelopes.
+* [Analytics & Twins](docs/wiki/Analytics.md) – KPI definitions, digital twin
+  parameterization, and Monte Carlo benchmarking playbooks.
+* [Translation Layer](docs/wiki/Translation.md) – bilingual data assets and
+  evaluation methodology.
 
 ## Contributing
 

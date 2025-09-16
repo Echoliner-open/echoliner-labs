@@ -23,7 +23,11 @@ from .geometry import (
     normalize_image_points,
     rectify_pair,
 )
-from .reconstruction import BundleAdjustmentProblem, IterativeTriangulator
+from .reconstruction import (
+    BundleAdjustmentProblem,
+    IterativeTriangulator,
+    VolumetricTSDF,
+)
 from .tracking import ConstantVelocityModel, JPDAF, KalmanTracker
 
 __all__ = [
@@ -44,6 +48,7 @@ __all__ = [
     "rectify_pair",
     "IterativeTriangulator",
     "BundleAdjustmentProblem",
+    "VolumetricTSDF",
     "ConstantVelocityModel",
     "KalmanTracker",
     "JPDAF",

@@ -1,7 +1,5 @@
 import numpy as np
 
-import numpy as np
-
 from echoliner.analytics import (
     CellComponent,
     DigitalTwin,
@@ -106,5 +104,54 @@ def test_digital_twin_generates_demand_gap() -> None:
         shift_minutes=10.0,
     )
     metrics = twin.run(demand=50.0, time_step=1.0)
-    assert "demand_gap" in metrics
+    expected_keys = {
+        "throughput",
+        "downtime",
+        "quality_output",
+        "energy_consumption",
+        "condition_index",
+        "joint_positions",
+        "joint_velocities",
+        "torque_norm",
+        "demand_gap",
+        "first_pass_yield",
+        "failure_flags",
+        "component_health",
+    }
+    assert expected_keys.issubset(metrics.keys())
     assert metrics["demand_gap"].shape == metrics["throughput"].shape
+    assert metrics["condition_index"].min() >= 0.0
+    assert metrics["condition_index"].max() <= 1.0 + 1e-6
+    assert metrics["component_health"].shape[1] == 1
+
+
+def test_cell_component_reports_energy_and_quality() -> None:
+    component = CellComponent(
+        "assembly",
+        cycle_time=1.0,
+        failure_rate=0.0,
+        repair_time=0.0,
+        quality_yield=0.9,
+        energy_per_cycle=0.2,
+        degradation_rate=0.0,
+    )
+    stats = component.simulate_step(time_step=1.0)
+    assert np.isclose(stats["production"], 1.0)
+    assert np.isclose(stats["quality"], 0.9)
+    assert np.isclose(stats["energy"], 0.2)
+    assert stats["downtime"] == 0.0
+    assert stats["failure"] == 0.0
+
+
+def test_digital_twin_monte_carlo_summary_shapes() -> None:
+    twin = DigitalTwin(
+        components=[CellComponent("assembly", 1.0, 0.05, 2.0)],
+        manipulator=KinematicChain([DHLink(a=0.3, alpha=0.0, d=0.0)]),
+        shift_minutes=5.0,
+    )
+    summary = twin.run_monte_carlo(demand=20.0, trials=3, time_step=1.0)
+    assert "throughput" in summary
+    mean = summary["throughput"]["mean"]
+    std = summary["throughput"]["std"]
+    assert mean.shape == std.shape
+    assert np.all(std >= 0.0)

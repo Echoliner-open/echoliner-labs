@@ -14,6 +14,7 @@ from echoliner.vision import (
     estimate_extrinsics_dlt,
     project_points,
     triangulate_points,
+    VolumetricTSDF,
 )
 
 
@@ -119,3 +120,16 @@ def test_asynchronous_fusion_engine_updates_state() -> None:
     engine.step(0.033)
     engine.ingest("vision", np.array([1.0]))
     assert np.allclose(engine.state().shape, (2,))
+
+
+def test_volumetric_tsdf_recovers_planar_surface() -> None:
+    bounds = np.array([[-0.5, -0.5, 0.0], [0.5, 0.5, 1.5]])
+    tsdf = VolumetricTSDF(bounds=bounds, resolution=(24, 24, 24), truncation=0.05)
+    depth = np.ones((16, 16), dtype=float)
+    intrinsics = np.array([[20.0, 0.0, 7.5], [0.0, 20.0, 7.5], [0.0, 0.0, 1.0]])
+    extrinsics = CameraExtrinsics(rotation=np.eye(3), translation=np.zeros(3))
+    tsdf.integrate(depth, intrinsics, extrinsics)
+    points = tsdf.extract_point_cloud(min_weight=0.5, band=0.2)
+    assert points.shape[1] == 3
+    assert points.size > 0
+    assert np.isclose(np.mean(points[:, 2]), 1.0, atol=0.2)
