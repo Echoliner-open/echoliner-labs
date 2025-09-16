@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib import metadata
 
-__all__ = ["analytics", "robotics", "translation", "vision", "__version__"]
+__all__ = ["analytics", "robotics", "translation", "vision", "common", "__version__"]
 
 try:
     __version__ = metadata.version("echoliner")

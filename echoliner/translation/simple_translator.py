@@ -9,6 +9,8 @@ from typing import DefaultDict, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 import numpy as np
 
+from .lexicon import DomainLexicon
+
 __all__ = ["ParallelCorpus", "StatisticalTranslator"]
 
 _TOKEN_PATTERN = re.compile(r"\w+|[^\w\s]", re.UNICODE)
@@ -57,11 +59,17 @@ class ParallelCorpus:
 class StatisticalTranslator:
     """Symmetric IBM Model-1 style translator with Laplace smoothing."""
 
-    def __init__(self, corpus: ParallelCorpus, smoothing: float = 0.5):
+    def __init__(
+        self,
+        corpus: ParallelCorpus,
+        smoothing: float = 0.5,
+        lexicon: DomainLexicon | None = None,
+    ):
         if smoothing <= 0:
             raise ValueError("smoothing must be positive")
         self._corpus = corpus
         self._smoothing = smoothing
+        self._lexicon = lexicon or DomainLexicon()
         token_pairs = corpus.tokenized()
         self._forward_counts: DefaultDict[str, Counter[str]] = defaultdict(Counter)
         self._backward_counts: DefaultDict[str, Counter[str]] = defaultdict(Counter)
@@ -143,6 +151,7 @@ class StatisticalTranslator:
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         direction = self._resolve_direction(source_lang, target_lang)
         tokens = _tokenize(text)
+        segments = self._lexicon.greedy_lookup(tokens)
         if direction == "forward":
             vocab_size = len(self._forward_vocab)
             table = self._forward_counts
@@ -152,7 +161,11 @@ class StatisticalTranslator:
             table = self._backward_counts
             memory = self._backward_memory
         translated_tokens: List[str] = []
-        for token in tokens:
+        for segment, matched in segments:
+            if matched:
+                translated_tokens.append(segment)
+                continue
+            token = segment
             if token in memory:
                 translated_tokens.append(memory[token])
             else:

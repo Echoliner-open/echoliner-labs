@@ -1,6 +1,20 @@
 import numpy as np
 
-from echoliner.robotics import DHLink, KinematicChain, plan_minimum_jerk
+import numpy as np
+
+from echoliner.robotics import (
+    DHLink,
+    ComputedTorqueController,
+    JointDynamics,
+    KinematicChain,
+    ModelPredictiveController,
+    RRTPlanner,
+    RigidBodyParameters,
+    TrajectorySmoother,
+    WorkspaceObstacle,
+    plan_minimum_jerk,
+    simulate_dynamics,
+)
 
 
 def _planar_chain() -> KinematicChain:
@@ -60,3 +74,45 @@ def test_minimum_jerk_profile_has_zero_boundary_velocity() -> None:
     velocities = np.gradient(positions, times, axis=0)
     np.testing.assert_allclose(velocities[0], np.zeros_like(start), atol=2e-2)
     np.testing.assert_allclose(velocities[-1], np.zeros_like(goal), atol=2e-2)
+
+
+def test_joint_dynamics_mass_matrix_positive() -> None:
+    chain = _planar_chain()
+    params = [
+        RigidBodyParameters(mass=5.0, com=np.array([0.1, 0.0, 0.0]), inertia=np.eye(3)),
+        RigidBodyParameters(mass=3.0, com=np.array([0.05, 0.0, 0.0]), inertia=np.eye(3)),
+    ]
+    model = JointDynamics(chain, params)
+    mass = model.mass_matrix(np.zeros(chain.dof))
+    assert np.all(np.linalg.eigvals(mass) > 0)
+
+
+def test_computed_torque_controller_outputs_vector() -> None:
+    chain = _planar_chain()
+    params = [
+        RigidBodyParameters(mass=4.0, com=np.zeros(3), inertia=np.eye(3)),
+        RigidBodyParameters(mass=2.0, com=np.zeros(3), inertia=np.eye(3)),
+    ]
+    model = JointDynamics(chain, params)
+    controller = ComputedTorqueController(model, kp=np.ones(2), kd=np.ones(2))
+    torque = controller(np.zeros(2), np.zeros(2), target_positions=[0.1, -0.1])
+    assert torque.shape == (2,)
+
+
+def test_rrt_planner_returns_path() -> None:
+    chain = _planar_chain()
+    planner = RRTPlanner(chain, bounds=[(-np.pi, np.pi), (-np.pi, np.pi)], max_iterations=100)
+    path = planner.plan([0.0, 0.0], [0.5, -0.5], lambda _: False)
+    assert path[0].shape == (2,)
+
+
+def test_simulate_dynamics_advances_state() -> None:
+    chain = _planar_chain()
+    params = [
+        RigidBodyParameters(mass=5.0, com=np.zeros(3), inertia=np.eye(3)),
+        RigidBodyParameters(mass=3.0, com=np.zeros(3), inertia=np.eye(3)),
+    ]
+    model = JointDynamics(chain, params)
+    q, dq = simulate_dynamics(model, np.zeros(2), np.zeros(2), np.ones(2), dt=0.01)
+    assert q.shape == (2,)
+    assert dq.shape == (2,)

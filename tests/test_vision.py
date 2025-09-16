@@ -1,9 +1,16 @@
 import numpy as np
 
 from echoliner.vision import (
+    AsynchronousFusionEngine,
     CameraExtrinsics,
+    ConstantVelocityModel,
+    KalmanTracker,
+    SensorStream,
+    UnscentedKalmanFilter,
     canny_edge_map,
     compose_projection_matrix,
+    decompose_essential_matrix,
+    essential_matrix,
     estimate_extrinsics_dlt,
     project_points,
     triangulate_points,
@@ -70,3 +77,45 @@ def test_triangulate_points_matches_ground_truth() -> None:
         [observations_left, observations_right],
     )
     assert np.allclose(triangulated, world_points, atol=1e-3)
+
+
+def test_essential_matrix_decomposition() -> None:
+    intrinsics = np.eye(3)
+    left = CameraExtrinsics(rotation=np.eye(3), translation=np.zeros(3))
+    right = CameraExtrinsics(rotation=np.eye(3), translation=np.array([0.1, 0.0, 0.0]))
+    e = essential_matrix(intrinsics, intrinsics, left, right)
+    decomposed = decompose_essential_matrix(e)
+    assert len(decomposed) == 4
+
+
+def test_kalman_tracker_associates_measurement() -> None:
+    model = ConstantVelocityModel(dt=1.0)
+    tracker = KalmanTracker(model=model)
+    tracker.start_track(np.array([0.0, 0.0]))
+    tracker.predict()
+    associations = tracker.update([np.array([0.5, 0.0])])
+    assert associations
+
+
+def test_asynchronous_fusion_engine_updates_state() -> None:
+    def process_model(state: np.ndarray) -> np.ndarray:
+        return state
+
+    ukf = UnscentedKalmanFilter(
+        state_dim=2,
+        measurement_dim=1,
+        process_model=process_model,
+        process_noise=np.eye(2) * 0.01,
+    )
+    streams = [
+        SensorStream(
+            name="vision",
+            frequency_hz=30.0,
+            covariance=np.array([[0.1]]),
+            projection=lambda state: np.array([state[0]]),
+        )
+    ]
+    engine = AsynchronousFusionEngine(ukf, streams)
+    engine.step(0.033)
+    engine.ingest("vision", np.array([1.0]))
+    assert np.allclose(engine.state().shape, (2,))

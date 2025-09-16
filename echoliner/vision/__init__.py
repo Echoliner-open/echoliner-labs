@@ -14,6 +14,17 @@ from .edge_detection import (
     hysteresis_threshold,
     non_maximum_suppression,
 )
+from .fusion import AsynchronousFusionEngine, SensorStream, UnscentedKalmanFilter
+from .geometry import (
+    EssentialDecomposition,
+    decompose_essential_matrix,
+    essential_matrix,
+    fundamental_matrix,
+    normalize_image_points,
+    rectify_pair,
+)
+from .reconstruction import BundleAdjustmentProblem, IterativeTriangulator
+from .tracking import ConstantVelocityModel, JPDAF, KalmanTracker
 
 __all__ = [
     "CameraExtrinsics",
@@ -26,4 +37,17 @@ __all__ = [
     "gradient_magnitude_orientation",
     "hysteresis_threshold",
     "non_maximum_suppression",
+    "essential_matrix",
+    "fundamental_matrix",
+    "decompose_essential_matrix",
+    "normalize_image_points",
+    "rectify_pair",
+    "IterativeTriangulator",
+    "BundleAdjustmentProblem",
+    "ConstantVelocityModel",
+    "KalmanTracker",
+    "JPDAF",
+    "AsynchronousFusionEngine",
+    "UnscentedKalmanFilter",
+    "SensorStream",
 ]
